@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Downloads Backup Dashboard</title>
+  <!-- chart.min.js is downloaded by install.sh; CDN fallback for first run -->
+  <script>
+    (function() {
+      var s = document.createElement('script');
+      s.src = '/static/chart.min.js';
+      s.onerror = function() {
+        var fb = document.createElement('script');
+        fb.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js';
+        document.head.appendChild(fb);
+      };
+      document.head.appendChild(s);
+    })();
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d2e;
+      --surface2: #252840;
+      --border: #2e3150;
+      --accent: #6c63ff;
+      --accent2: #00d4aa;
+      --text: #e2e8f0;
+      --muted: #8892a4;
+      --ok: #00d4aa;
+      --skip: #f59e0b;
+      --err: #f43f5e;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .last-run {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .btn {
+      padding: 0.5rem 1.1rem;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    /* Stat cards */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-value {
+      font-size: 1.75rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .stat-sub {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.4rem;
+    }
+
+    /* Charts */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    @media (max-width: 900px) {
+      .charts-grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+
+    .card-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1.25rem;
+    }
+
+    .chart-wrap {
+      position: relative;
+    }
+
+    .chart-wrap.donut { height: 240px; }
+    .chart-wrap.line { height: 240px; }
+
+    /* Log table */
+    .log-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+
+    .log-title {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    thead th {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      color: var(--muted);
+      font-weight: 500;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border);
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+
+    tbody tr:hover { background: var(--surface2); }
+    tbody tr:last-child { border-bottom: none; }
+
+    td {
+      padding: 0.75rem 1rem;
+      color: var(--text);
+      max-width: 300px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge-ok { background: rgba(0, 212, 170, 0.15); color: var(--ok); }
+    .badge-skipped { background: rgba(245, 158, 11, 0.15); color: var(--skip); }
+    .badge-error { background: rgba(244, 63, 94, 0.15); color: var(--err); }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem;
+      color: var(--muted);
+    }
+
+    /* Run now feedback */
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.5rem;
+      font-size: 0.85rem;
+      max-width: 360px;
+      z-index: 100;
+      display: none;
+    }
+
+    .toast.show { display: block; }
+    .toast.success { border-color: var(--ok); }
+    .toast.error { border-color: var(--err); }
+
+    /* Layout bottom section */
+    .bottom-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    @media (max-width: 1000px) {
+      .bottom-grid { grid-template-columns: 1fr; }
+    }
+
+    .run-history-list {
+      list-style: none;
+    }
+
+    .run-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.6rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.82rem;
+    }
+
+    .run-item:last-child { border-bottom: none; }
+
+    .run-time { color: var(--muted); font-size: 0.75rem; }
+
+    .run-counts {
+      display: flex;
+      gap: 0.75rem;
+      font-size: 0.78rem;
+    }
+
+    .run-moved { color: var(--ok); }
+    .run-skipped { color: var(--skip); }
+    .run-error { color: var(--err); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">&#9729;</div>
+    Downloads Backup
+  </div>
+  <div class="header-right">
+    <span class="last-run" id="last-run-label">Loading...</span>
+    <button class="btn btn-primary" id="run-now-btn" onclick="runNow()">Run Now</button>
+  </div>
+</header>
+
+<main>
+  <!-- Stat cards -->
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-label">Files Moved Today</div>
+      <div class="stat-value" id="today-count">—</div>
+      <div class="stat-sub" id="today-bytes">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Last 30 Days</div>
+      <div class="stat-value" id="month-count">—</div>
+      <div class="stat-sub" id="month-bytes">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Freed</div>
+      <div class="stat-value" id="total-count">—</div>
+      <div class="stat-sub" id="total-bytes">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Last Run Status</div>
+      <div class="stat-value" id="last-run-status">—</div>
+      <div class="stat-sub" id="last-run-detail">—</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-grid">
+    <div class="card">
+      <div class="card-title">By File Type (30 days)</div>
+      <div class="chart-wrap donut">
+        <canvas id="type-chart"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Daily Files Moved (30 days)</div>
+      <div class="chart-wrap line">
+        <canvas id="daily-chart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log table + run history -->
+  <div class="bottom-grid">
+    <div class="card">
+      <div class="log-header">
+        <div class="log-title">Upload History (30 days)</div>
+      </div>
+      <div id="log-container">
+        <div class="empty-state">Loading...</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Recent Runs</div>
+      <ul class="run-history-list" id="run-list">
+        <li style="color:var(--muted); font-size:0.85rem;">Loading...</li>
+      </ul>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  let typeChart = null;
+  let dailyChart = null;
+
+  const PALETTE = [
+    "#6c63ff","#00d4aa","#f59e0b","#f43f5e","#3b82f6",
+    "#a855f7","#ec4899","#14b8a6","#f97316","#84cc16"
+  ];
+
+  function fmt_bytes(b) {
+    if (b == null || b === 0) return "0 B";
+    const units = ["B","KB","MB","GB","TB"];
+    let i = 0;
+    while (b >= 1024 && i < units.length - 1) { b /= 1024; i++; }
+    return `${b.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+  }
+
+  function fmt_date(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return d.toLocaleString();
+  }
+
+  function fmt_date_short(iso) {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return d.toLocaleDateString();
+  }
+
+  function show_toast(msg, type) {
+    const t = document.getElementById("toast");
+    t.textContent = msg;
+    t.className = `toast show ${type}`;
+    setTimeout(() => t.classList.remove("show"), 4000);
+  }
+
+  async function load_stats() {
+    const r = await fetch("/api/stats");
+    const s = await r.json();
+
+    document.getElementById("today-count").textContent = s.today_count.toLocaleString();
+    document.getElementById("today-bytes").textContent = fmt_bytes(s.today_bytes) + " freed";
+    document.getElementById("month-count").textContent = s.month_count.toLocaleString();
+    document.getElementById("month-bytes").textContent = fmt_bytes(s.month_bytes) + " freed";
+    document.getElementById("total-count").textContent = s.total_count.toLocaleString();
+    document.getElementById("total-bytes").textContent = fmt_bytes(s.total_bytes) + " freed";
+
+    if (s.last_run) {
+      const lr = s.last_run;
+      const moved = lr.files_moved ?? 0;
+      const errs = lr.files_errored ?? 0;
+      document.getElementById("last-run-status").textContent =
+        errs > 0 ? `${errs} errors` : `${moved} moved`;
+      document.getElementById("last-run-status").style.color =
+        errs > 0 ? "var(--err)" : "var(--ok)";
+      document.getElementById("last-run-detail").textContent =
+        lr.finished_at ? fmt_date(lr.finished_at) : "running…";
+      document.getElementById("last-run-label").textContent =
+        "Last run: " + (lr.finished_at ? fmt_date(lr.finished_at) : "in progress");
+    } else {
+      document.getElementById("last-run-status").textContent = "Never";
+      document.getElementById("last-run-label").textContent = "No runs yet";
+    }
+  }
+
+  async function load_type_chart() {
+    const r = await fetch("/api/chart/by-type");
+    const data = await r.json();
+
+    const ctx = document.getElementById("type-chart").getContext("2d");
+    if (typeChart) typeChart.destroy();
+
+    if (data.length === 0) {
+      ctx.canvas.parentElement.innerHTML =
+        '<div class="empty-state">No data yet</div>';
+      return;
+    }
+
+    typeChart = new Chart(ctx, {
+      type: "doughnut",
+      data: {
+        labels: data.map(d => d.file_type || "no_ext"),
+        datasets: [{
+          data: data.map(d => d.count),
+          backgroundColor: data.map((_, i) => PALETTE[i % PALETTE.length]),
+          borderWidth: 0,
+          hoverOffset: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: "right",
+            labels: { color: "#8892a4", font: { size: 12 }, boxWidth: 12 }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` ${ctx.label}: ${ctx.parsed} files (${fmt_bytes(data[ctx.dataIndex].total_bytes)})`
+            }
+          }
+        }
+      }
+    });
+  }
+
+  async function load_daily_chart() {
+    const r = await fetch("/api/chart/daily");
+    const data = await r.json();
+
+    const ctx = document.getElementById("daily-chart").getContext("2d");
+    if (dailyChart) dailyChart.destroy();
+
+    if (data.length === 0) {
+      ctx.canvas.parentElement.innerHTML =
+        '<div class="empty-state">No data yet</div>';
+      return;
+    }
+
+    dailyChart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: data.map(d => d.date),
+        datasets: [{
+          label: "Files moved",
+          data: data.map(d => d.file_count),
+          borderColor: "#6c63ff",
+          backgroundColor: "rgba(108,99,255,0.15)",
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              afterLabel: ctx => `  ${fmt_bytes(data[ctx.dataIndex].bytes_moved)} freed`
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: "#8892a4", font: { size: 11 } },
+            grid: { color: "rgba(46,49,80,0.6)" }
+          },
+          y: {
+            ticks: { color: "#8892a4", font: { size: 11 }, stepSize: 1 },
+            grid: { color: "rgba(46,49,80,0.6)" },
+            beginAtZero: true,
+          }
+        }
+      }
+    });
+  }
+
+  async function load_history() {
+    const r = await fetch("/api/history?days=30");
+    const rows = await r.json();
+    const container = document.getElementById("log-container");
+
+    if (rows.length === 0) {
+      container.innerHTML = '<div class="empty-state">No uploads yet. Run the mover to get started.</div>';
+      return;
+    }
+
+    const tbl = document.createElement("table");
+    tbl.innerHTML = `
+      <thead>
+        <tr>
+          <th>Filename</th>
+          <th>Date</th>
+          <th>Size</th>
+          <th>Type</th>
+          <th>Status</th>
+          <th>Note</th>
+        </tr>
+      </thead>
+    `;
+    const tbody = document.createElement("tbody");
+    for (const row of rows) {
+      const tr = document.createElement("tr");
+      const badgeCls = row.status === "ok" ? "badge-ok" :
+                       row.status === "skipped" ? "badge-skipped" : "badge-error";
+      tr.innerHTML = `
+        <td title="${row.filename}">${row.filename}</td>
+        <td>${fmt_date_short(row.moved_at)}</td>
+        <td>${fmt_bytes(row.file_size)}</td>
+        <td>${row.file_type || "—"}</td>
+        <td><span class="badge ${badgeCls}">${row.status}</span></td>
+        <td title="${row.error_msg || ''}">${row.error_msg || "—"}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+    tbl.appendChild(tbody);
+    container.innerHTML = "";
+    container.appendChild(tbl);
+  }
+
+  async function load_runs() {
+    const r = await fetch("/api/runs");
+    const runs = await r.json();
+    const ul = document.getElementById("run-list");
+
+    if (runs.length === 0) {
+      ul.innerHTML = '<li style="color:var(--muted);font-size:0.85rem;">No runs yet</li>';
+      return;
+    }
+
+    ul.innerHTML = runs.map(run => `
+      <li class="run-item">
+        <div>
+          <div style="font-size:0.82rem;">${fmt_date(run.started_at)}</div>
+          <div class="run-time">${fmt_bytes(run.bytes_moved)} freed</div>
+        </div>
+        <div class="run-counts">
+          <span class="run-moved">${run.files_moved}↑</span>
+          <span class="run-skipped">${run.files_skipped}⊘</span>
+          <span class="run-error">${run.files_errored}✗</span>
+        </div>
+      </li>
+    `).join("");
+  }
+
+  async function runNow() {
+    const btn = document.getElementById("run-now-btn");
+    btn.disabled = true;
+    btn.textContent = "Running…";
+    try {
+      const r = await fetch("/api/run-now", { method: "POST" });
+      const data = await r.json();
+      if (data.success) {
+        show_toast("Run completed successfully.", "success");
+        load_all();
+      } else {
+        show_toast("Run failed: " + (data.error || data.stderr || "unknown error"), "error");
+      }
+    } catch (e) {
+      show_toast("Request failed: " + e.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Run Now";
+    }
+  }
+
+  function load_all() {
+    load_stats();
+    load_type_chart();
+    load_daily_chart();
+    load_history();
+    load_runs();
+  }
+
+  load_all();
+  setInterval(load_all, 60000);
+</script>
+</body>
+</html>
