@@ -1,11 +1,11 @@
 import logging
-import os
+import shutil
 import time
 from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 
-from mover import auth, config_loader, db, graph_client
+from mover import config_loader, db
 
 
 @dataclass
@@ -37,27 +37,35 @@ def _is_excluded(path: Path, exclude_extensions: list[str]) -> bool:
     return path.suffix.lower() in [e.lower() for e in exclude_extensions]
 
 
+def _resolve_dest(src: Path, dest_dir: Path) -> Path:
+    dest = dest_dir / src.name
+    if not dest.exists():
+        return dest
+    stem = src.stem
+    suffix = src.suffix
+    n = 1
+    while True:
+        dest = dest_dir / f"{stem}_{n}{suffix}"
+        if not dest.exists():
+            return dest
+        n += 1
+
+
 def run_mover(config, conn) -> RunSummary:
     log = logging.getLogger(__name__)
     summary = RunSummary()
     now_utc = datetime.now(timezone.utc).isoformat()
     run_id = db.insert_run_start(conn, now_utc)
 
-    try:
-        token = auth.get_token(config)
-    except RuntimeError as e:
-        log.error(str(e))
-        db.update_run_finish(conn, run_id, datetime.now(timezone.utc).isoformat(), 0, 0, 1, 0)
-        return summary
-
-    log.info("Ensuring OneDrive folder '%s' exists", config.onedrive_folder)
-    graph_client.ensure_folder(token, config.onedrive_folder)
-
     source_dir = config.expanded_source_dir()
+    dest_dir = config.expanded_dest_dir()
+
     if not source_dir.exists():
         log.error("Source directory does not exist: %s", source_dir)
         db.update_run_finish(conn, run_id, datetime.now(timezone.utc).isoformat(), 0, 0, 1, 0)
         return summary
+
+    dest_dir.mkdir(parents=True, exist_ok=True)
 
     files = [p for p in source_dir.iterdir() if p.is_file()]
     log.info("Found %d files in %s", len(files), source_dir)
@@ -85,11 +93,11 @@ def run_mover(config, conn) -> RunSummary:
             continue
 
         try:
-            dest_path = graph_client.upload_file(token, path, config.onedrive_folder)
-            os.remove(path)
-            log.info("MOVED %s → OneDrive:%s (%d bytes)", path.name, dest_path, file_size)
+            dest = _resolve_dest(path, dest_dir)
+            shutil.move(str(path), str(dest))
+            log.info("MOVED %s → %s (%d bytes)", path.name, dest, file_size)
             db.insert_move(conn, filename=path.name, source_path=str(path),
-                           dest_path=dest_path, file_size=file_size, file_type=file_type,
+                           dest_path=str(dest), file_size=file_size, file_type=file_type,
                            moved_at=moved_at, status="ok")
             summary.files_moved += 1
             summary.bytes_moved += file_size

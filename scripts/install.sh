@@ -56,15 +56,30 @@ fi
 # Create config.json from defaults if not exists
 if [ ! -f "$PROJECT_DIR/config.json" ]; then
   cp "$PROJECT_DIR/config.default.json" "$PROJECT_DIR/config.json"
-  echo "Created config.json — edit it to set your client_id and OneDrive folder."
+  echo "Created config.json"
 fi
 
 # Initialize database
 "$VENV_PYTHON" -m mover.db --init
 
+# Validate OneDrive folder is accessible
+DEST_DIR=$("$VENV_PYTHON" -c "
+import json, os
+with open('$PROJECT_DIR/config.json') as f:
+    c = json.load(f)
+print(os.path.expanduser(c.get('dest_dir', '')))
+")
+if [ -n "$DEST_DIR" ] && [ ! -d "$DEST_DIR" ]; then
+  echo ""
+  echo "NOTE: OneDrive destination folder does not exist yet:"
+  echo "  $DEST_DIR"
+  echo "It will be created automatically on the first run."
+  echo "Make sure the OneDrive desktop app is installed and signed in."
+fi
+
 # Read schedule from config.json
 HOUR=$("$VENV_PYTHON" -c "
-import json, os
+import json
 with open('$PROJECT_DIR/config.json') as f:
     c = json.load(f)
 print(c.get('schedule_hour', 2))
@@ -100,19 +115,15 @@ echo "=================================================="
 echo "  Installation Complete!"
 echo "=================================================="
 echo ""
-echo "  Schedule:    Daily at ${HOUR}:$(printf '%02d' $MINUTE)"
-echo "  Data dir:    $DATA_DIR"
-echo "  Config:      $PROJECT_DIR/config.json"
+echo "  Schedule:   Daily at ${HOUR}:$(printf '%02d' $MINUTE)"
+echo "  Source:     $(python3 -c "import os; print(os.path.expanduser('$(python3 -c "import json; print(json.load(open(\"$PROJECT_DIR/config.json\")).get(\"source_dir\",\"~/Downloads\"))")')")"
+echo "  OneDrive:   $DEST_DIR"
+echo "  Data dir:   $DATA_DIR"
 echo ""
-echo "  Next steps:"
-echo "  1. Edit config.json and add your Azure client_id"
-echo "     (see README.md for Azure app registration steps)"
-echo "  2. Run: bash scripts/login.sh"
-echo "     (one-time Microsoft account login)"
-echo "  3. View dashboard:"
-echo "     bash scripts/run_dashboard.sh"
-echo "     then open http://localhost:7474"
+echo "  Test immediately:"
+echo "    bash scripts/run_dashboard.sh"
+echo "    curl -X POST http://localhost:7474/api/run-now"
 echo ""
 echo "  Verify schedule:"
-echo "  launchctl list | grep downloadsbackup"
+echo "    launchctl list | grep downloadsbackup"
 echo ""

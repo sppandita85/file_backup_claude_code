@@ -1,6 +1,6 @@
 import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -11,8 +11,7 @@ class ConfigError(Exception):
 @dataclass
 class Config:
     source_dir: str
-    onedrive_folder: str
-    client_id: str
+    dest_dir: str
     schedule_hour: int
     schedule_minute: int
     min_age_minutes: int
@@ -20,19 +19,18 @@ class Config:
     dashboard_port: int
     db_path: str
     log_path: str
-    token_cache_path: str
 
     def expanded_source_dir(self) -> Path:
         return Path(os.path.expanduser(self.source_dir))
+
+    def expanded_dest_dir(self) -> Path:
+        return Path(os.path.expanduser(self.dest_dir))
 
     def expanded_db_path(self) -> str:
         return os.path.expanduser(self.db_path)
 
     def expanded_log_path(self) -> str:
         return os.path.expanduser(self.log_path)
-
-    def expanded_token_cache_path(self) -> str:
-        return os.path.expanduser(self.token_cache_path)
 
 
 def load(config_path: str | None = None) -> Config:
@@ -49,9 +47,8 @@ def load(config_path: str | None = None) -> Config:
 
 
 def _validate(data: dict):
-    required = ["source_dir", "onedrive_folder", "schedule_hour",
-                 "schedule_minute", "min_age_minutes", "dashboard_port",
-                 "db_path", "log_path", "token_cache_path"]
+    required = ["source_dir", "dest_dir", "schedule_hour", "schedule_minute",
+                 "min_age_minutes", "dashboard_port", "db_path", "log_path"]
     for key in required:
         if key not in data:
             raise ConfigError(f"Missing required config key: {key}")
