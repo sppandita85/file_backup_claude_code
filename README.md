@@ -31,15 +31,20 @@ That's it. The nightly job is now active.
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `source_dir` | `~/Downloads` | Folder to move files from |
-| `dest_dir` | `~/Library/CloudStorage/OneDrive-Personal/Downloads-Backup` | OneDrive folder to move files into |
+| `source_dirs` | `["~/Downloads", "~/Documents"]` | List of folders to move items from |
+| `dest_dir` | `~/Library/CloudStorage/OneDrive-Personal/Mac-Backup` | OneDrive root destination — each source folder gets its own subfolder inside (e.g. `Mac-Backup/Downloads/`, `Mac-Backup/Documents/`) |
 | `schedule_hour` | `2` | Hour to run (0–23, 24-hour clock) |
 | `schedule_minute` | `0` | Minute to run |
-| `min_age_minutes` | `5` | Skip files modified in the last N minutes |
-| `exclude_extensions` | `.crdownload .part .download .tmp` | Extensions to always skip |
+| `min_age_minutes` | `5` | Skip files/folders modified in the last N minutes |
+| `exclude_extensions` | `.crdownload .part .download .tmp` | File extensions to always skip (does not apply to folders) |
 | `dashboard_port` | `7474` | Local port for the dashboard |
 
 To find your exact OneDrive folder path, open Finder — it shows up in the sidebar as "OneDrive". Right-click → "Get Info" to see the full path.
+
+You can add more folders to `source_dirs`, e.g.:
+```json
+"source_dirs": ["~/Downloads", "~/Documents", "~/Desktop"]
+```
 
 After editing `config.json`, re-run `bash scripts/install.sh` to update the schedule.
 

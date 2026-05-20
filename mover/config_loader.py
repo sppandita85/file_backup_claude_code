@@ -10,7 +10,7 @@ class ConfigError(Exception):
 
 @dataclass
 class Config:
-    source_dir: str
+    source_dirs: list[str]
     dest_dir: str
     schedule_hour: int
     schedule_minute: int
@@ -20,8 +20,8 @@ class Config:
     db_path: str
     log_path: str
 
-    def expanded_source_dir(self) -> Path:
-        return Path(os.path.expanduser(self.source_dir))
+    def expanded_source_dirs(self) -> list[Path]:
+        return [Path(os.path.expanduser(d)) for d in self.source_dirs]
 
     def expanded_dest_dir(self) -> Path:
         return Path(os.path.expanduser(self.dest_dir))
@@ -42,17 +42,23 @@ def load(config_path: str | None = None) -> Config:
     if user_path.exists():
         data.update(json.loads(user_path.read_text()))
 
+    # Accept legacy single source_dir string
+    if "source_dir" in data and "source_dirs" not in data:
+        data["source_dirs"] = [data.pop("source_dir")]
+
     _validate(data)
     return Config(**{k: data[k] for k in Config.__dataclass_fields__})
 
 
 def _validate(data: dict):
-    required = ["source_dir", "dest_dir", "schedule_hour", "schedule_minute",
+    required = ["source_dirs", "dest_dir", "schedule_hour", "schedule_minute",
                  "min_age_minutes", "dashboard_port", "db_path", "log_path"]
     for key in required:
         if key not in data:
             raise ConfigError(f"Missing required config key: {key}")
 
+    if not isinstance(data["source_dirs"], list) or not data["source_dirs"]:
+        raise ConfigError("source_dirs must be a non-empty list")
     if not (0 <= data["schedule_hour"] <= 23):
         raise ConfigError("schedule_hour must be 0-23")
     if not (0 <= data["schedule_minute"] <= 59):

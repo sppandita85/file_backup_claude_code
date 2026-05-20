@@ -1,6 +1,6 @@
 {
-  "source_dir": "~/Downloads",
-  "dest_dir": "~/Library/CloudStorage/OneDrive-Personal/Downloads-Backup",
+  "source_dirs": ["~/Downloads", "~/Documents"],
+  "dest_dir": "~/Library/CloudStorage/OneDrive-Personal/Mac-Backup",
   "schedule_hour": 2,
   "schedule_minute": 0,
   "min_age_minutes": 5,

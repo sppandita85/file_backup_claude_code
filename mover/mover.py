@@ -28,12 +28,24 @@ def _setup_logging(log_path: str):
     )
 
 
+def _folder_size(path: Path) -> int:
+    return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+
+
 def _is_safe_to_move(path: Path, min_age_minutes: int) -> bool:
-    age_seconds = time.time() - path.stat().st_mtime
-    return age_seconds >= min_age_minutes * 60
+    """For folders, check that no file inside was modified recently."""
+    min_age_seconds = min_age_minutes * 60
+    if path.is_dir():
+        return all(
+            time.time() - f.stat().st_mtime >= min_age_seconds
+            for f in path.rglob("*") if f.is_file()
+        )
+    return time.time() - path.stat().st_mtime >= min_age_seconds
 
 
 def _is_excluded(path: Path, exclude_extensions: list[str]) -> bool:
+    if path.is_dir():
+        return False
     return path.suffix.lower() in [e.lower() for e in exclude_extensions]
 
 
@@ -41,8 +53,9 @@ def _resolve_dest(src: Path, dest_dir: Path) -> Path:
     dest = dest_dir / src.name
     if not dest.exists():
         return dest
-    stem = src.stem
-    suffix = src.suffix
+    # For files: stem + suffix; for folders: full name
+    stem = src.stem if src.is_file() else src.name
+    suffix = src.suffix if src.is_file() else ""
     n = 1
     while True:
         dest = dest_dir / f"{stem}_{n}{suffix}"
@@ -51,42 +64,35 @@ def _resolve_dest(src: Path, dest_dir: Path) -> Path:
         n += 1
 
 
-def run_mover(config, conn) -> RunSummary:
-    log = logging.getLogger(__name__)
-    summary = RunSummary()
-    now_utc = datetime.now(timezone.utc).isoformat()
-    run_id = db.insert_run_start(conn, now_utc)
-
-    source_dir = config.expanded_source_dir()
-    dest_dir = config.expanded_dest_dir()
-
+def _move_item(source_dir: Path, dest_dir: Path, config, conn, summary: RunSummary, log):
+    """Move all top-level files and folders from source_dir to dest_dir."""
     if not source_dir.exists():
         log.error("Source directory does not exist: %s", source_dir)
-        db.update_run_finish(conn, run_id, datetime.now(timezone.utc).isoformat(), 0, 0, 1, 0)
-        return summary
+        return
 
     dest_dir.mkdir(parents=True, exist_ok=True)
+    items = list(source_dir.iterdir())
+    log.info("Found %d items in %s", len(items), source_dir)
 
-    files = [p for p in source_dir.iterdir() if p.is_file()]
-    log.info("Found %d files in %s", len(files), source_dir)
-
-    for path in files:
+    for path in items:
         moved_at = datetime.now(timezone.utc).isoformat()
-        file_size = path.stat().st_size
-        file_type = path.suffix.lstrip(".").lower() or "no_ext"
+        is_dir = path.is_dir()
+        item_size = _folder_size(path) if is_dir else path.stat().st_size
+        file_type = "folder" if is_dir else (path.suffix.lstrip(".").lower() or "no_ext")
 
         if _is_excluded(path, config.exclude_extensions):
             log.info("SKIP %s (excluded extension)", path.name)
             db.insert_move(conn, filename=path.name, source_path=str(path),
-                           dest_path="", file_size=file_size, file_type=file_type,
+                           dest_path="", file_size=item_size, file_type=file_type,
                            moved_at=moved_at, status="skipped", error_msg="excluded extension")
             summary.files_skipped += 1
             continue
 
         if not _is_safe_to_move(path, config.min_age_minutes):
-            log.info("SKIP %s (modified within last %d min)", path.name, config.min_age_minutes)
+            label = "folder modified" if is_dir else "modified"
+            log.info("SKIP %s (%s within last %d min)", path.name, label, config.min_age_minutes)
             db.insert_move(conn, filename=path.name, source_path=str(path),
-                           dest_path="", file_size=file_size, file_type=file_type,
+                           dest_path="", file_size=item_size, file_type=file_type,
                            moved_at=moved_at, status="skipped",
                            error_msg=f"modified within last {config.min_age_minutes} min")
             summary.files_skipped += 1
@@ -95,18 +101,31 @@ def run_mover(config, conn) -> RunSummary:
         try:
             dest = _resolve_dest(path, dest_dir)
             shutil.move(str(path), str(dest))
-            log.info("MOVED %s → %s (%d bytes)", path.name, dest, file_size)
+            log.info("MOVED %s → %s (%d bytes)", path.name, dest, item_size)
             db.insert_move(conn, filename=path.name, source_path=str(path),
-                           dest_path=str(dest), file_size=file_size, file_type=file_type,
+                           dest_path=str(dest), file_size=item_size, file_type=file_type,
                            moved_at=moved_at, status="ok")
             summary.files_moved += 1
-            summary.bytes_moved += file_size
+            summary.bytes_moved += item_size
         except Exception as exc:
             log.error("ERROR %s: %s", path.name, exc)
             db.insert_move(conn, filename=path.name, source_path=str(path),
-                           dest_path="", file_size=file_size, file_type=file_type,
+                           dest_path="", file_size=item_size, file_type=file_type,
                            moved_at=moved_at, status="error", error_msg=str(exc))
             summary.files_errored += 1
+
+
+def run_mover(config, conn) -> RunSummary:
+    log = logging.getLogger(__name__)
+    summary = RunSummary()
+    now_utc = datetime.now(timezone.utc).isoformat()
+    run_id = db.insert_run_start(conn, now_utc)
+
+    dest_dir = config.expanded_dest_dir()
+
+    for source_dir in config.expanded_source_dirs():
+        log.info("--- Processing %s ---", source_dir)
+        _move_item(source_dir, dest_dir / source_dir.name, config, conn, summary, log)
 
     finished_at = datetime.now(timezone.utc).isoformat()
     db.update_run_finish(conn, run_id, finished_at, summary.files_moved,
