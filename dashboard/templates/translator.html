@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>eClerx Batch 2 Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d2e;
+      --surface2: #252840;
+      --border: #2e3150;
+      --accent: #6c63ff;
+      --accent2: #00d4aa;
+      --text: #e2e8f0;
+      --muted: #8892a4;
+      --ok: #00d4aa;
+      --err: #f43f5e;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+
+    .logo-text {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      padding: 2.5rem 1.5rem;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 720px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .welcome {
+      background: linear-gradient(135deg, rgba(108, 99, 255, 0.15), rgba(0, 212, 170, 0.10));
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      color: var(--text);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    .welcome strong { color: var(--accent2); }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.75rem;
+    }
+
+    .card h2 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: var(--text);
+    }
+
+    .field-label {
+      display: block;
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 130px;
+      padding: 0.9rem 1rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    textarea:focus { border-color: var(--accent); }
+    textarea::placeholder { color: var(--muted); }
+
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    .btn {
+      padding: 0.6rem 1.4rem;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: opacity 0.15s;
+      color: white;
+    }
+    .btn:hover { opacity: 0.88; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-primary { background: var(--accent); }
+    .btn-secondary { background: var(--surface2); color: var(--muted); }
+
+    .output-card {
+      min-height: 80px;
+    }
+
+    .output-text {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.9rem 1rem;
+      font-size: 1rem;
+      line-height: 1.55;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      min-height: 60px;
+    }
+
+    .output-text.placeholder { color: var(--muted); font-style: italic; }
+    .output-text.error { color: var(--err); border-color: rgba(244, 63, 94, 0.4); }
+
+    .hint {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 0.5rem;
+    }
+
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.8rem;
+      padding: 1.25rem;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo-icon">eC</div>
+    <div class="logo-text">eClerx Batch 2 Demo</div>
+  </header>
+
+  <main>
+    <div class="container">
+      <div class="welcome">
+        <strong>Welcoming all the participants from eClerx</strong> — let's make useful products in the next couple of weeks.
+      </div>
+
+      <div class="card">
+        <h2>English → German Translator</h2>
+
+        <label class="field-label" for="input">English</label>
+        <textarea id="input" placeholder="Enter an English sentence…"></textarea>
+
+        <div class="actions">
+          <button id="clear" class="btn btn-secondary" type="button">Clear</button>
+          <button id="submit" class="btn btn-primary" type="button">Translate</button>
+        </div>
+        <div class="hint">Tip: press Ctrl/Cmd + Enter to translate.</div>
+      </div>
+
+      <div class="card output-card">
+        <h2>German</h2>
+        <div id="output" class="output-text placeholder">Translation will appear here.</div>
+      </div>
+    </div>
+  </main>
+
+  <footer>eClerx Batch 2 Demo · English → German</footer>
+
+  <script>
+    const inputEl = document.getElementById('input');
+    const submitBtn = document.getElementById('submit');
+    const clearBtn = document.getElementById('clear');
+    const outputEl = document.getElementById('output');
+
+    function setOutput(text, kind) {
+      outputEl.className = 'output-text' + (kind ? ' ' + kind : '');
+      outputEl.textContent = text;
+    }
+
+    async function translate() {
+      const text = inputEl.value.trim();
+      if (!text) {
+        setOutput('Please enter a sentence to translate.', 'error');
+        return;
+      }
+      submitBtn.disabled = true;
+      const originalLabel = submitBtn.textContent;
+      submitBtn.textContent = 'Translating…';
+      setOutput('Translating…', 'placeholder');
+      try {
+        const res = await fetch('/api/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setOutput(data.error || 'Translation failed.', 'error');
+        } else {
+          setOutput(data.translation || '(empty translation)', '');
+        }
+      } catch (err) {
+        setOutput('Network error: ' + err.message, 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalLabel;
+      }
+    }
+
+    submitBtn.addEventListener('click', translate);
+    clearBtn.addEventListener('click', () => {
+      inputEl.value = '';
+      setOutput('Translation will appear here.', 'placeholder');
+      inputEl.focus();
+    });
+    inputEl.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        translate();
+      }
+    });
+  </script>
+</body>
+</html>

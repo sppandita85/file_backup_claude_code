@@ -4,6 +4,8 @@ from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
 
+from deep_translator import GoogleTranslator
+
 from mover import db
 
 
@@ -67,6 +69,22 @@ def register_routes(app: Flask, config):
             "exclude_extensions": config.exclude_extensions,
             "dashboard_port": config.dashboard_port,
         })
+
+    @app.route("/translator")
+    def translator():
+        return render_template("translator.html")
+
+    @app.route("/api/translate", methods=["POST"])
+    def api_translate():
+        data = request.get_json(silent=True) or {}
+        text = (data.get("text") or "").strip()
+        if not text:
+            return jsonify({"error": "Please enter a sentence to translate."}), 400
+        try:
+            translation = GoogleTranslator(source="en", target="de").translate(text)
+            return jsonify({"translation": translation or ""})
+        except Exception as exc:
+            return jsonify({"error": f"Translation failed: {exc}"}), 500
 
     @app.route("/api/run-now", methods=["POST"])
     def run_now():
