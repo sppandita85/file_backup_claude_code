@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 
-from mover import config_loader, db
+from mover import auth, config_loader, db, graph_client
 
 
 @dataclass
@@ -49,28 +49,14 @@ def _is_excluded(path: Path, exclude_extensions: list[str]) -> bool:
     return path.suffix.lower() in [e.lower() for e in exclude_extensions]
 
 
-def _resolve_dest(src: Path, dest_dir: Path) -> Path:
-    dest = dest_dir / src.name
-    if not dest.exists():
-        return dest
-    # For files: stem + suffix; for folders: full name
-    stem = src.stem if src.is_file() else src.name
-    suffix = src.suffix if src.is_file() else ""
-    n = 1
-    while True:
-        dest = dest_dir / f"{stem}_{n}{suffix}"
-        if not dest.exists():
-            return dest
-        n += 1
-
-
-def _move_item(source_dir: Path, dest_dir: Path, config, conn, summary: RunSummary, log):
-    """Move all top-level files and folders from source_dir to dest_dir."""
+def _process_source(token: str, source_dir: Path, onedrive_folder: str,
+                    config, conn, summary: RunSummary, log):
+    """Upload and delete all top-level files and folders in source_dir."""
     if not source_dir.exists():
         log.error("Source directory does not exist: %s", source_dir)
         return
 
-    dest_dir.mkdir(parents=True, exist_ok=True)
+    graph_client.ensure_folder(token, onedrive_folder)
     items = list(source_dir.iterdir())
     log.info("Found %d items in %s", len(items), source_dir)
 
@@ -89,8 +75,7 @@ def _move_item(source_dir: Path, dest_dir: Path, config, conn, summary: RunSumma
             continue
 
         if not _is_safe_to_move(path, config.min_age_minutes):
-            label = "folder modified" if is_dir else "modified"
-            log.info("SKIP %s (%s within last %d min)", path.name, label, config.min_age_minutes)
+            log.info("SKIP %s (modified within last %d min)", path.name, config.min_age_minutes)
             db.insert_move(conn, filename=path.name, source_path=str(path),
                            dest_path="", file_size=item_size, file_type=file_type,
                            moved_at=moved_at, status="skipped",
@@ -99,14 +84,20 @@ def _move_item(source_dir: Path, dest_dir: Path, config, conn, summary: RunSumma
             continue
 
         try:
-            dest = _resolve_dest(path, dest_dir)
-            shutil.move(str(path), str(dest))
-            log.info("MOVED %s → %s (%d bytes)", path.name, dest, item_size)
+            if is_dir:
+                dest_path = graph_client.upload_folder(token, path, onedrive_folder)
+                shutil.rmtree(str(path))
+            else:
+                dest_path = graph_client.upload_file(token, path, onedrive_folder)
+                path.unlink()
+
+            log.info("MOVED %s → OneDrive:%s (%d bytes)", path.name, dest_path, item_size)
             db.insert_move(conn, filename=path.name, source_path=str(path),
-                           dest_path=str(dest), file_size=item_size, file_type=file_type,
+                           dest_path=dest_path, file_size=item_size, file_type=file_type,
                            moved_at=moved_at, status="ok")
             summary.files_moved += 1
             summary.bytes_moved += item_size
+
         except Exception as exc:
             log.error("ERROR %s: %s", path.name, exc)
             db.insert_move(conn, filename=path.name, source_path=str(path),
@@ -121,11 +112,17 @@ def run_mover(config, conn) -> RunSummary:
     now_utc = datetime.now(timezone.utc).isoformat()
     run_id = db.insert_run_start(conn, now_utc)
 
-    dest_dir = config.expanded_dest_dir()
+    try:
+        token = auth.get_token(config)
+    except RuntimeError as e:
+        log.error(str(e))
+        db.update_run_finish(conn, run_id, datetime.now(timezone.utc).isoformat(), 0, 0, 1, 0)
+        return summary
 
     for source_dir in config.expanded_source_dirs():
-        log.info("--- Processing %s ---", source_dir)
-        _move_item(source_dir, dest_dir / source_dir.name, config, conn, summary, log)
+        onedrive_folder = f"{config.onedrive_dest_dir}/{source_dir.name}"
+        log.info("--- Processing %s → OneDrive:%s ---", source_dir, onedrive_folder)
+        _process_source(token, source_dir, onedrive_folder, config, conn, summary, log)
 
     finished_at = datetime.now(timezone.utc).isoformat()
     db.update_run_finish(conn, run_id, finished_at, summary.files_moved,

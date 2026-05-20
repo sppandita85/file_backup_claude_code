@@ -1,11 +1,13 @@
 {
   "source_dirs": ["~/Downloads", "~/Documents"],
-  "dest_dir": "~/Library/CloudStorage/OneDrive-Personal/Mac-Backup",
+  "onedrive_dest_dir": "Mac-Backup",
+  "client_id": "",
   "schedule_hour": 2,
   "schedule_minute": 0,
   "min_age_minutes": 5,
   "exclude_extensions": [".crdownload", ".part", ".download", ".tmp"],
   "dashboard_port": 7474,
   "db_path": "~/.local/share/downloadsbackup/history.db",
-  "log_path": "~/.local/share/downloadsbackup/mover.log"
+  "log_path": "~/.local/share/downloadsbackup/mover.log",
+  "token_cache_path": "~/.local/share/downloadsbackup/token_cache.json"
 }

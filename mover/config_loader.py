@@ -11,7 +11,8 @@ class ConfigError(Exception):
 @dataclass
 class Config:
     source_dirs: list[str]
-    dest_dir: str
+    onedrive_dest_dir: str
+    client_id: str
     schedule_hour: int
     schedule_minute: int
     min_age_minutes: int
@@ -19,18 +20,19 @@ class Config:
     dashboard_port: int
     db_path: str
     log_path: str
+    token_cache_path: str
 
     def expanded_source_dirs(self) -> list[Path]:
         return [Path(os.path.expanduser(d)) for d in self.source_dirs]
-
-    def expanded_dest_dir(self) -> Path:
-        return Path(os.path.expanduser(self.dest_dir))
 
     def expanded_db_path(self) -> str:
         return os.path.expanduser(self.db_path)
 
     def expanded_log_path(self) -> str:
         return os.path.expanduser(self.log_path)
+
+    def expanded_token_cache_path(self) -> str:
+        return os.path.expanduser(self.token_cache_path)
 
 
 def load(config_path: str | None = None) -> Config:
@@ -51,8 +53,9 @@ def load(config_path: str | None = None) -> Config:
 
 
 def _validate(data: dict):
-    required = ["source_dirs", "dest_dir", "schedule_hour", "schedule_minute",
-                 "min_age_minutes", "dashboard_port", "db_path", "log_path"]
+    required = ["source_dirs", "onedrive_dest_dir", "client_id", "schedule_hour",
+                 "schedule_minute", "min_age_minutes", "dashboard_port",
+                 "db_path", "log_path", "token_cache_path"]
     for key in required:
         if key not in data:
             raise ConfigError(f"Missing required config key: {key}")
